@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id            String   @id @default(uuid())
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model Products {
+  id            String   @id @default(uuid())   // UUID as the product id
+  featuredImage String?  // Optional field
+  handle        String?  // Optional field
+  status        String?  // Optional field
+  title         String?  // Optional field
+  store_id      String  @unique 
+}
+
+
+model GroupProducts {
+  id            String   @id @default(uuid()) // Use UUID for the primary key
+  group_id      String   // Reference to the groups table (UUID)
+  product_sku   String   // SKU of the product
+  product_name  String   // Name of the product
+  swatch_title  String   // Title for the swatch
+  swatch_color  String   // Hex code for the color (e.g., "#FFFFFF")
+  swatch_image  String   // URL of the swatch image (stored on Shopify CDN)
+  sort_order     Int      // Sort order (numerical)
+
+}
