@@ -1,26 +1,21 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Session {
-  id            String   @id @default(uuid())
-  shop          String
+  id            String   @id @default(uuid()) // UUID as the primary key
+  shop          String   @unique
+
   state         String
   isOnline      Boolean   @default(false)
   scope         String?
   expires       DateTime?
-  accessToken   String
+  accessToken   String    
   userId        BigInt?
   firstName     String?
   lastName      String?
@@ -29,26 +24,53 @@ model Session {
   locale        String?
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false)
+
+  // Relation to products model
+  products      products[] @relation("SessionProducts") // One session can have multiple products
 }
 
-model Products {
-  id            String   @id @default(uuid())   // UUID as the product id
-  featuredImage String?  // Optional field
-  handle        String?  // Optional field
-  status        String?  // Optional field
-  title         String?  // Optional field
-  store_id      String  @unique 
+model products {
+  id            String   @id // Use the ID from the API as the primary key
+  product_sku   String?
+  product_name  String?
+  featuredImage String?
+  handle        String?
+  status        String?
+  title         String?
+  store_id      String   // Store ID linked to session's ID (foreign key)
+
+  // Relation to session model
+  session       Session   @relation("SessionProducts", fields: [store_id], references: [id]) // Linking store_id with session ID
 }
 
 
-model GroupProducts {
-  id            String   @id @default(uuid()) // Use UUID for the primary key
-  group_id      String   // Reference to the groups table (UUID)
-  product_sku   String   // SKU of the product
-  product_name  String   // Name of the product
-  swatch_title  String   // Title for the swatch
-  swatch_color  String   // Hex code for the color (e.g., "#FFFFFF")
-  swatch_image  String   // URL of the swatch image (stored on Shopify CDN)
-  sort_order     Int      // Sort order (numerical)
+model groupproducts {
+  id            String   @id @default(uuid()) // UUID as the primary key
+  group_id      String   // Foreign key referencing groups table
+  product_sku   String
+  product_name  String
+  swatch_title  String?
+  swatch_color  String?
+  swatch_image  String?
+  sort_order    Int?
 
+  // Relation to groups model
+  group         groups    @relation(fields: [group_id], references: [id]) // Linking to groups table
+}
+
+model groups {
+  id              String   @id @default(uuid()) // UUID as the primary key
+  group_identifier String?
+  button_style     ButtonStyle
+  option_title     String?
+  store_id         String
+
+  // Relation to groupproducts model
+  products        groupproducts[]
+}
+
+enum ButtonStyle {
+  ColorSwatch
+  ProductImageSwatch
+  Text
 }

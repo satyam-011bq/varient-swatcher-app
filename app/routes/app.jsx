@@ -7,24 +7,43 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import { authenticate } from "../shopify.server";
 import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
+import { log } from "console";
 
 const prisma = new PrismaClient();
-const arr = []; // Ensure arr is defined here
+const arr = []; // Access token array
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+
 
 export const loader = async ({ request }) => {
   await authenticate.admin(request);
 
-  const accessToken = await fetchAccessToken(); // Fetch access token here
-  if (!accessToken) {
-    throw new Response("Access token missing", { status: 400 });
+  const shop = "testing-wishlist-inject.myshopify.com"; // Replace with your store name
+
+  // Fetch the access token from the session table
+  const session = await prisma.session.findUnique({
+    where: { shop: shop }, // Ensure to check by shop now
+    select: { accessToken: true },
+  });
+
+  if (!session) {
+    throw new Response("Session not found", { status: 404 });
   }
 
-  const shopifyDomain = "testing-wishlist-inject.myshopify.com"; // Replace with your store details
+  const accessToken = session.accessToken;
 
+  // Check if products for this store are already stored in the database
+  const existingProducts = await prisma.products.findMany({
+    where: { store_id: session.id }, // Use session ID for store_id
+  });
+
+  if (existingProducts.length > 0) {
+    return json(existingProducts);
+  }
+
+  // API call to fetch products if not found in DB
   try {
-    const response = await fetch(`https://${shopifyDomain}/admin/api/2023-04/products.json`, {
+    const response = await fetch(`https://${shop}/admin/api/2023-04/products.json`, {
       method: "GET",
       headers: {
         "X-Shopify-Access-Token": accessToken,
@@ -37,94 +56,90 @@ export const loader = async ({ request }) => {
     }
 
     const data = await response.json();
+    const sessionId = "c6cb7f1e-c3d0-4743-8404-e4d24b075a66"; // Replace with the actual session ID
 
-    // Insert products into the database
-    await Promise.all(data.products.map(insertProductToDB));
-    await Promise.all(data.products.map(insertGroupProductsToDB));
+    // Store fetched products in the database
+  // Store fetched products in the database
+await Promise.all(
+  data.products.map((product) =>
+    prisma.products.upsert({
+      where: {
+        id: product.id.toString(), // Use the product ID from API as the unique identifier
+      },
+      update: {
+        product_sku: product.sku, // Assuming product.sku is available
+        product_name: product.name, // Assuming product.name is available
+        featuredImage: product.featuredImage, // Assuming product.featuredImage is available
+        handle: product.handle, // Assuming product.handle is available
+        status: product.status, // Assuming product.status is available
+        title: product.title, // Assuming product.title is available
+        store_id: sessionId, // Link the product to the correct session/store
+      },
+      create: {
+        id: product.id.toString(), // Use product ID as the primary key
+        product_sku: product.sku,
+        product_name: product.name,
+        featuredImage: product.featuredImage,
+        handle: product.handle,
+        status: product.status,
+        title: product.title,
+        store_id: sessionId, // Link the product to the correct session/store
+      },
+    })
+  )
+);
 
+  
     return json(data.products);
   } catch (error) {
     console.error("Error fetching products:", error);
     throw new Response("Failed to fetch products", { status: 500 });
   }
-};
-
-async function fetchAccessToken() {
-  const sessions = await prisma.session.findMany({
-    select: {
-      accessToken: true, // Only fetch the accessToken field
-    }
-  });
-  if (sessions.length > 0) {
-    arr.push(sessions[0].accessToken);
-    return arr[0];
-  }
-  return null;
 }
+;
 
-async function insertProductToDB(productData) {
+
+// Insert or update group products
+async function insertGroupProductsToDB(productData, groupId) {
   try {
-    const newProduct = await prisma.products.upsert({
-      where: { store_id: productData.id.toString() }, // Use Shopify product ID as the unique identifier
-      update: {
-        featuredImage: productData.image?.src || null,
-        handle: productData.handle,
-        status: productData.status,
-        title: productData.title,
-      },
-      create: {
-        id: uuidv4(), // Generate a new UUID for the product ID
-        featuredImage: productData.image?.src || null,
-        handle: productData.handle,
-        status: productData.status,
-        title: productData.title,
-        store_id: productData.id.toString(), // Use the Shopify product ID for store_id
-      }
+    const existingGroup = await prisma.groups.findUnique({
+      where: { id: groupId },
     });
 
-    console.log("Product inserted/updated successfully:", newProduct);
-  } catch (error) {
-    console.error("Error inserting product:", error);
-  }
-}
+    if (!existingGroup) {
+      throw new Error("Group does not exist");
+    }
 
-async function insertGroupProductsToDB(productData) {
-  try {
     const groupProductsPromises = productData.variants.map(async (variant) => {
-      return await prisma.GroupProducts.upsert({
+      return await prisma.groupproducts.upsert({
         where: { id: variant.id.toString() }, // Using variant ID as unique identifier
         update: {
-          group_id: uuidv4(), // Replace with actual group ID logic
-          product_sku: variant.sku || "No SKU", // SKU from the variant
-          product_name: productData.title, // Title from product
-          swatch_title: variant.option1 || "No Option", // Option1 for swatch title
-          swatch_color: variant.option2 || "No Color", // Option2 for color
-          swatch_image: productData.image?.src || null, // Product image
-          sort_order: variant.position, // Variant position
-        },
-        create: {
-          id: variant.id.toString(), // Generating new UUID for the primary key
-          group_id: uuidv4(), // Replace with actual group ID logic
-          product_sku: variant.sku || "No SKU",
+          group_id: groupId, // Use the provided group ID
           product_name: productData.title,
           swatch_title: variant.option1 || "No Option",
           swatch_color: variant.option2 || "No Color",
           swatch_image: productData.image?.src || null,
           sort_order: variant.position,
-        }
+        },
+        create: {
+          id: uuidv4(), // Generate a new UUID for the group product
+          group_id: groupId, // Use the provided group ID
+          product_name: productData.title,
+          swatch_title: variant.option1 || "No Option",
+          swatch_color: variant.option2 || "No Color",
+          swatch_image: productData.image?.src || null,
+          sort_order: variant.position,
+        },
       });
     });
 
-    // Wait for all variants to be inserted/updated
     const results = await Promise.all(groupProductsPromises);
-    console.log("Products inserted/updated successfully2:", results);
+    console.log("Group products inserted/updated successfully:", results);
   } catch (error) {
     console.error("Error inserting group products:", error);
   }
 }
 
-
-// Shopify needs Remix to catch some thrown responses so that their headers are included in the response.
 export function ErrorBoundary() {
   return boundary.error(useRouteError());
 }
@@ -139,9 +154,7 @@ export default function App() {
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
-        <Link to="/app" rel="home">
-          Home
-        </Link>
+        <Link to="/app" rel="home">Home</Link>
         <Link to="/app/additional">Product page</Link>
         <Link to="/app/count">Count page</Link>
       </NavMenu>

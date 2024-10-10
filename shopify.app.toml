@@ -3,7 +3,7 @@
 client_id = "42f7e0e9b8bff40b5e3716c560183aa3"
 name = "Varient-swatcher-feature"
 handle = "varient-swatcher-feature"
-application_url = "https://float-brooklyn-material-purchasing.trycloudflare.com"
+application_url = "https://retailer-pj-downloadable-paintings.trycloudflare.com"
 embedded = true
 
 [build]
@@ -17,9 +17,9 @@ scopes = "read_products,write_products"
 
 [auth]
 redirect_urls = [
-  "https://float-brooklyn-material-purchasing.trycloudflare.com/auth/callback",
-  "https://float-brooklyn-material-purchasing.trycloudflare.com/auth/shopify/callback",
-  "https://float-brooklyn-material-purchasing.trycloudflare.com/api/auth/callback"
+  "https://retailer-pj-downloadable-paintings.trycloudflare.com/auth/callback",
+  "https://retailer-pj-downloadable-paintings.trycloudflare.com/auth/shopify/callback",
+  "https://retailer-pj-downloadable-paintings.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]

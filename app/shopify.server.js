@@ -12,11 +12,22 @@ import { v4 as uuidv4 } from "uuid";
 // Create a custom session handler
 class CustomPrismaSessionStorage extends PrismaSessionStorage {
   async storeSession(session) {
-    // Generate a UUID instead of using the default session ID
+    const existingSession = await this.getSessionTable().findUnique({
+      where: { shop: session.shop },
+    });
+  
+    if (existingSession) {
+      // Agar session exist karta hai, to return karo existing session
+      return existingSession;
+    }
+  
+    // Generate a UUID if the session is new
     session.id = uuidv4();
     return super.storeSession(session);
   }
-}
+  
+  }
+
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
